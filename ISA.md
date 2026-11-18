@@ -4,7 +4,7 @@ task: "CoolerControl device plugin that lets fan curves stop the HP OMEN laptop 
 slug: 20261118-154500_cc-omen-plugin
 project: CC-Omen-plugin
 phase: climbing
-progress: 28/47
+progress: 31/47
 started: 2026-11-18T15:45:00+01:00
 updated: 2026-11-18T16:35:00+01:00
 principal_stated_goal: 'CoolerControl is great, but it cannot stop the fans completely. Convince CoolerControl to stop the fans if the system temperature is low, while the fans still react early enough to keep the hardware cool.'
@@ -70,9 +70,9 @@ Open the lid, read mail, write code: the laptop is silent. Start a build; at the
 Why: the plugin builds, versions and proves itself from one command.
 
 - [x] ISC-1: `cargo test` and `cargo build --release` pass on a clean checkout. — ✓ cargo test 33+6 green; cargo build --release --locked ok
-- [ ] ISC-2: A git pre-commit hook raises the build number in `version.properties` on every commit that changes plugin code, and the plugin reports that version to CoolerControl.
-- [ ] ISC-3: The GitHub repository and its mirror are private until a publish decision, and both `main` branches equal local `main`.
-- [ ] ISC-4: Every issue exists on both forges under the same number and title.
+- [x] ISC-2: A git pre-commit hook raises the build number in `version.properties` on every commit that changes plugin code, and the plugin reports that version to CoolerControl. — ✓ commit 8615697 raised build 1→2; `cc_omen --version` = 0.1.0+2
+- [x] ISC-3: The GitHub repository and its mirror are private until a publish decision, and both `main` branches equal local `main`. — ✓ gh visibility PRIVATE; both main = 8615697
+- [x] ISC-4: Every issue exists on both forges under the same number and title. — ✓ #1–#10 created in order on both; open set #1, #8, #10 on both
 - [x] ISC-5: Anti: no tracked file is Python, and no script or doc invokes npm or npx. — ✓ git ls-files: 0 .py; rg npm/npx only in this ISA's own criterion text
 - [x] ISC-6: Anti: no tracked file, issue or commit message contains a personal name, private hostname, home-directory path or e-mail address other than the GitHub noreply address. — ✓ bun scripts/privacy-scan.ts clean (files, commits, issues); planted leak caught
 
@@ -212,4 +212,4 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 
 ## Status
 
-Built and proven against a fake sysfs: 28/47 criteria closed. 13 of 13 deliberate breaks of a safety guard are caught (`bun scripts/mutate.ts`). Open: everything that needs the plugin installed in CoolerControl and the real fans (ISC-7, 9, 10, 17–19, 23–25, 27, 29–33, 47), plus the forge criteria until the push (ISC-2–4). Next: the user runs `./install.sh`, then the live checks.
+Built and proven against a fake sysfs: 31/47 criteria closed. 13 of 13 deliberate breaks of a safety guard are caught (`bun scripts/mutate.ts`). Open: everything that needs the plugin installed in CoolerControl and the real fans (ISC-7, 9, 10, 17–19, 23–25, 27, 29–33, 47). Next: the user runs `./install.sh`, then the live checks.
