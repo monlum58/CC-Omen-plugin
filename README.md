@@ -38,11 +38,19 @@ It shows CoolerControl one device, **HP OMEN fans**, with two channels, **CPU fa
 
 ## Install
 
+**From a release** (no Rust needed): download `cc_omen-<version>-x86_64-linux.tar.gz` from the [releases](https://github.com/monlum58/CC-Omen-plugin/releases), then:
+
+```bash
+tar xzf cc_omen-*-x86_64-linux.tar.gz && cd cc_omen-*/ && ./install.sh
+```
+
+**From source:**
+
 ```bash
 ./install.sh
 ```
 
-It builds as your user, then uses `sudo` to copy the binary and `manifest.toml` to `/var/lib/coolercontrol/plugins/cc_omen/`, adds the SELinux `bin_t` label (with `semanage fcontext` and `restorecon`, so it survives a relabel), and restarts `coolercontrold`.
+In a source checkout it builds as your user first. Either way it then uses `sudo` to copy the binary and `manifest.toml` to `/var/lib/coolercontrol/plugins/cc_omen/`, adds the SELinux `bin_t` label (with `semanage fcontext` and `restorecon`, so it survives a relabel), and restarts `coolercontrold`.
 
 ## Set up CoolerControl
 

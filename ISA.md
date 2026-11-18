@@ -4,7 +4,7 @@ task: "CoolerControl device plugin that lets fan curves stop the HP OMEN laptop 
 slug: 20261118-154500_cc-omen-plugin
 project: CC-Omen-plugin
 phase: learn
-progress: 48/48
+progress: 48/50
 started: 2026-11-18T15:45:00+01:00
 updated: 2026-11-18T17:40:00+01:00
 principal_stated_goal: 'CoolerControl is great, but it cannot stop the fans completely. Convince CoolerControl to stop the fans if the system temperature is low, while the fans still react early enough to keep the hardware cool.'
@@ -74,7 +74,7 @@ Why: the plugin builds, versions and proves itself from one command.
 
 - [x] ISC-1: `cargo test` and `cargo build --release` pass on a clean checkout. — ✓ cargo test 33+6 green; cargo build --release --locked ok
 - [x] ISC-2: A git pre-commit hook raises the build number in `version.properties` on every commit that changes plugin code, and the plugin reports that version to CoolerControl. — ✓ commit 8615697 raised build 1→2; `cc_omen --version` = 0.1.0+2
-- [x] ISC-3: The GitHub repository and its mirror are private until a publish decision, and both `main` branches equal local `main`. — ✓ gh visibility PRIVATE; both main = 8615697
+- [x] ISC-3: The GitHub repository and its mirror are private until a publish decision, and both `main` branches equal local `main`. — ✓ gh visibility PRIVATE; both main = 8615697. Publish decision 2026-11-18 by the user ("make it public and a release"): GitHub goes public, the Forgejo mirror stays private (ISC-49).
 - [x] ISC-4: Every issue exists on both forges under the same number and title. — ✓ #1–#10 created in order on both; open set #1, #8, #10 on both
 - [x] ISC-5: Anti: no tracked file is Python, and no script or doc invokes npm or npx. — ✓ git ls-files: 0 .py; rg npm/npx only in this ISA's own criterion text
 - [x] ISC-6: Anti: no tracked file, issue or commit message contains a personal name, private hostname, home-directory path or e-mail address other than a noreply address. — ✓ bun scripts/privacy-scan.ts clean (files, 2 commits, issues). It matches generic e-mail, home-path and LAN-address patterns plus the terms in the git-ignored `.privacy-terms`, as whole words ("monitor" is no hit), with `!token` lines allowing the public GitHub handle. A planted file with an e-mail, a home path and two listed terms gave 4 findings and exit 1.
@@ -138,6 +138,12 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 - [x] ISC-30: Under CPU load the CPU fan starts within one status cycle of the CPU temperature crossing the curve's first non-zero point. — ✓ 5 Hz sampler: CPU first ≥ 50 °C at 16:42:45.780, en 2→1 at 16:42:46.232 (0.45 s)
 - [x] ISC-31: Killed 2026-11-18 by the user ("yes" to dropping it): a peak-temperature race against firmware auto cannot be measured under the user's 85 °C safety limit on this CPU. Run 1 (17:04, 16 threads) gave a false PASS from a leftover guard flag. Run 2 (17:30, 16 threads, 30 s) went 49→85 °C in 11 s with the plugin and 7 s with firmware auto. Run 3 (17:32, 4 threads, 90 s) went 50→85 °C in about 10 s and 5 s. Both guards tripped in every run, before any fan could matter. The provable advantage is the earlier start (ISC-30: manual within 0.45 s of the curve threshold), and the comparison phase is removed from `scripts/live-checks.sh`.
 - [x] ISC-48: Anti: no live check heats the laptop past 85 °C: every load phase in `scripts/live-checks.sh` runs under a guard that kills the load and sets full speed at 85 °C, no load phase runs longer than 90 s, and the firmware-auto run happens once, after a cool-down. — ✓ live-checks 2026-11-18 16:56–17:06: guard tripped at 85 °C at 17:05:26, load killed, fans to full speed (en=0, 2900 RPM rising)
+
+### F6 · Public release
+Why: anyone with this laptop can install it without a Rust toolchain, and nothing personal goes public with it.
+
+- [ ] ISC-49: The GitHub repository is public with a clean privacy scan of files, history and issues, while the Forgejo mirror stays private.
+- [ ] ISC-50: GitHub release `v0.1.0` carries `cc_omen-0.1.0-x86_64-linux.tar.gz` with the binary, `manifest.toml`, `install.sh`, `uninstall.sh`, README and LICENSE, plus its SHA-256; unpacked, `install.sh` uses the bundled binary and never calls cargo.
 - [x] ISC-32: After the load ends, the fans stop again once both curves are back at 0 % and the dwell has passed. — ✓ last reading ≥ 50 °C at 16:42:03.5, en 1→2 at 16:42:36.9 (dwell 30 s + CoolerControl's 2 s response delay), fans 0 RPM
 - [x] ISC-33: After `kill -9` of the plugin while the fans are in manual (light load), CoolerControl restarts it and the new instance writes firmware auto, or the script reports how long the fans stayed manual. — ✓ live-checks 2026-11-18 16:56–17:06: SIGKILL at light load, CoolerControl restarted the plugin after 1 s, new instance wrote firmware auto
 
@@ -193,6 +199,8 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 | ISC-32 | bash | sampling after load | 0 RPM after dwell | sudo scripts/live-checks.sh | literal | normal | integrity |
 | ISC-33 | bash | kill -9 at light load, sample sysfs | restarted and auto, or time reported | sudo scripts/live-checks.sh | literal | critical | integrity |
 | ISC-48 | bash | guard trips at 85 °C; phase lengths in the script | ≤ 90 s, guard present | rg -n -e GUARD_C -e LOAD_S scripts/live-checks.sh | literal | critical | build |
+| ISC-49 | bash | visibility of both repos; privacy scan | public / private; clean | gh repo view --json visibility | literal | critical | integrity |
+| ISC-50 | bash | download release asset, check contents and checksum; install.sh in the unpacked folder with a stub sudo | all files; sha matches; no cargo call | gh release download v0.1.0 | literal | critical | integrity |
 
 ## Not yet specified
 

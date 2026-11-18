@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
-# Builds the plugin (as you) and installs it into CoolerControl's plugin folder (with sudo).
+# Installs the plugin into CoolerControl's plugin folder (with sudo).
 #   ./install.sh
-# Writes only the plugin folder and one SELinux file-context rule, then restarts coolercontrold.
+# In a source checkout it first builds as you; in an unpacked release it uses the cc_omen
+# binary next to this script. Writes only the plugin folder and one SELinux file-context
+# rule, then restarts coolercontrold.
 set -euo pipefail
 
 ID=cc_omen
 HERE="$(cd "$(dirname "$0")" && pwd)"
-BIN="$HERE/target/release/$ID"
+if [ -f "$HERE/Cargo.toml" ]; then BIN="$HERE/target/release/$ID"; else BIN="$HERE/$ID"; fi
 
 if [ "$(id -u)" -ne 0 ]; then
-  (cd "$HERE" && cargo build --release --locked)
+  [ -f "$HERE/Cargo.toml" ] && (cd "$HERE" && cargo build --release --locked)
   exec sudo "$0" "$@"
 fi
 
-[ -x "$BIN" ] || { echo "no $BIN: run ./install.sh as your user so it can build first" >&2; exit 1; }
+[ -x "$BIN" ] || { echo "no $BIN: in a source checkout run ./install.sh as your user so it can build first" >&2; exit 1; }
 command -v coolercontrold >/dev/null || { echo "coolercontrold is not installed" >&2; exit 1; }
 
 PLUGINS="$(readlink -f /var/lib/coolercontrol/plugins 2>/dev/null || echo /var/lib/coolercontrol/plugins)"
