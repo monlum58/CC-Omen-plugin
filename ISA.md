@@ -3,10 +3,10 @@ name: "CC-Omen-plugin"
 task: "CoolerControl device plugin that lets fan curves stop the HP OMEN laptop fans"
 slug: 20261118-154500_cc-omen-plugin
 project: CC-Omen-plugin
-phase: climbing
-progress: 46/48
+phase: complete
+progress: 48/48
 started: 2026-11-18T15:45:00+01:00
-updated: 2026-11-18T16:35:00+01:00
+updated: 2026-11-18T17:40:00+01:00
 principal_stated_goal: 'CoolerControl is great, but it cannot stop the fans completely. Convince CoolerControl to stop the fans if the system temperature is low, while the fans still react early enough to keep the hardware cool.'
 principal_stated_goal_source: conversation 2026-11-18
 principal_stated_goal_signal: 3
@@ -99,7 +99,7 @@ Why: no failure leaves the hardware at a low fixed speed with nobody in charge.
 - [x] ISC-16: On `Shutdown`, SIGTERM, SIGINT or a panic, the plugin sets `pwm1_enable` to 2 before exiting. — ✓ process_full_lifecycle (SIGTERM), process_shutdown_rpc_hands_fans_back, panic_hook_hands_fans_to_firmware; mutations caught
 - [x] ISC-17: If no RPC arrives for the watchdog timeout (default 15 s) while in manual mode, the plugin sets firmware auto and logs it. — ✓ live-checks 17:29:55: coolercontrold frozen (SIGSTOP) with fans manual, firmware auto after 15 s, warning logged once
 - [x] ISC-18: If the CPU temperature reaches the emergency limit (default 95 °C), the plugin sets `pwm1_enable` to 0 (full speed) until it falls 10 °C below the limit, whatever CoolerControl asks. — ✓ live-checks 2026-11-18 16:56–17:06: test limit 70 °C, full speed at 76.0 °C, released at 58.6 °C
-- [ ] ISC-19: After suspend and resume, the requested mode and duties are applied again within one status cycle.
+- [x] ISC-19: After suspend and resume, the requested mode and duties are applied again within one status cycle. — ✓ suspend 17:35:00–17:35:11 (s2idle): the plugin kept running, CoolerControl re-initialised it at 17:35:13 (InitializeDevice forgets the applied state and rewrites it), no write error and no "changed outside the plugin" warning, which fires whenever the hardware mode differs from the last write
 - [x] ISC-20: At start the plugin refuses to run, with a clear log line, unless an hwmon device named `hp` with `pwm1_enable`, `pwm1` and `pwm2` exists. — ✓ process_refuses_without_the_fan_interface, process_refuses_without_a_cpu_sensor
 - [x] ISC-21: Anti: the plugin never writes any file outside the `hp` hwmon directory, its own socket and its own plugin folder. — ✓ only hw::write_attr (3 fixed names) and hw::force_auto open files for writing; socket in /run
 - [x] ISC-22: Anti: no sequence of RPCs and clock ticks leaves the fans in manual mode with no RPC received for longer than the watchdog timeout (probe: property test over random sequences against the fake sysfs). — ✓ proptest_never_manual_without_a_live_controller; mutation 'watchdog never trips' caught
@@ -125,7 +125,7 @@ Why: one command in, one command out, and it survives updates and Secure Boot.
 - [x] ISC-24: After install, `journalctl -u cc-plugin-cc_omen` shows the plugin started and connected, with no `203/EXEC`. — ✓ journal: "Starting cc_omen v0.1.0+3", "firmware auto set at start", 0 × 203/EXEC; binary labelled system_u:object_r:bin_t:s0
 - [x] ISC-25: `sudo ./uninstall.sh` removes the plugin folder and the SELinux rule, leaves `pwm1_enable` at 2, and restarts `coolercontrold`. — ✓ live-checks 2026-11-18 16:56–17:06: uninstall exit 0, en=2, nothing left behind
 - [x] ISC-26: The README, the install script's closing message and the plugin's foreign-writer warning all say to disable the stock `hp` device in CoolerControl, and the README explains assigning curves to the plugin's channels. — ✓ README § Set up CoolerControl, install.sh line 38, engine.rs ForeignChange warning (the user reported there is no "Default Profile" entry in the UI, so the earlier wording was wrong)
-- [ ] ISC-27: The plugin starts and controls the fans after a reboot with Secure Boot enabled.
+- [x] ISC-27: The plugin starts and controls the fans after a reboot with Secure Boot enabled. — ✓ reboot 2026-11-18: `mokutil --sb-state` = SecureBoot enabled; boot 17:36:51, plugin "firmware auto set at start" 17:37:07; fans then followed the curve (en=1, 2200/2000 RPM with the CPU warm from booting)
 - [x] ISC-28: Anti: the install script writes nothing outside `/var/lib/coolercontrol/plugins/cc_omen/` and the SELinux file-context rule. — ✓ install.sh writes plugin folder + one semanage rule only (read)
 
 ### F5 · Real-machine proof
@@ -215,4 +215,4 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 
 ## Status
 
-Built and proven against a fake sysfs: 31/47 criteria closed. 13 of 13 deliberate breaks of a safety guard are caught (`bun scripts/mutate.ts`). Open: everything that needs the plugin installed in CoolerControl and the real fans (ISC-7, 9, 10, 17–19, 23–25, 27, 29–33, 47). Next: the user runs `./install.sh`, then the live checks.
+Complete: 48/48 (ISC-31 killed by the user, the rest proven). Unit, property and process tests against a fake sysfs, 13 of 13 safety mutations caught, and live checks on the laptop: 0 RPM at idle, fans starting within 0.45 s of the curve, stopping after the dwell, watchdog at 15 s, emergency at a test limit, `kill -9` recovered in 1 s, suspend, reboot with Secure Boot, uninstall and reinstall. Public release needs the user's explicit go-ahead (`bun scripts/privacy-scan.ts` first).
