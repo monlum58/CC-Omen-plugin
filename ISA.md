@@ -4,7 +4,7 @@ task: "CoolerControl device plugin that lets fan curves stop the HP OMEN laptop 
 slug: 20261118-154500_cc-omen-plugin
 project: CC-Omen-plugin
 phase: climbing
-progress: 45/48
+progress: 46/48
 started: 2026-11-18T15:45:00+01:00
 updated: 2026-11-18T16:35:00+01:00
 principal_stated_goal: 'CoolerControl is great, but it cannot stop the fans completely. Convince CoolerControl to stop the fans if the system temperature is low, while the fans still react early enough to keep the hardware cool.'
@@ -133,7 +133,7 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 
 - [x] ISC-29: Idle for 5 minutes with curves assigned: both fans at 0 RPM and `pwm1_enable` = 2. — ✓ live-checks 2026-11-18 16:56–17:06: 144/144 samples at en=2, 0/0 RPM over 300 s
 - [x] ISC-30: Under CPU load the CPU fan starts within one status cycle of the CPU temperature crossing the curve's first non-zero point. — ✓ 5 Hz sampler: CPU first ≥ 50 °C at 16:42:45.780, en 2→1 at 16:42:46.232 (0.45 s)
-- [ ] ISC-31: During a 90-second medium load (4 of 16 threads busy) the peak CPU temperature with the plugin is lower than with firmware auto under the same load from the same start temperature, both recorded in the Log; a run whose plugin side trips the 85 °C guard is a FAIL, never a PASS. (Run 1, 17:04: the plugin side reached 85 °C after about 45 s of 16-thread load, the leftover guard flag ended the firmware side at once, and the script wrongly printed PASS. Run 2, 17:30, 30 s of 16-thread load: 49→85 °C in 11 s with the plugin and 7 s with firmware auto, so both tripped the guard before any fan could matter. Medium sustained load is the case the user reported, where firmware auto reacts late.)
+- [x] ISC-31: Killed 2026-11-18 by the user ("yes" to dropping it): a peak-temperature race against firmware auto cannot be measured under the user's 85 °C safety limit on this CPU. Run 1 (17:04, 16 threads) gave a false PASS from a leftover guard flag. Run 2 (17:30, 16 threads, 30 s) went 49→85 °C in 11 s with the plugin and 7 s with firmware auto. Run 3 (17:32, 4 threads, 90 s) went 50→85 °C in about 10 s and 5 s. Both guards tripped in every run, before any fan could matter. The provable advantage is the earlier start (ISC-30: manual within 0.45 s of the curve threshold), and the comparison phase is removed from `scripts/live-checks.sh`.
 - [x] ISC-48: Anti: no live check heats the laptop past 85 °C: every load phase in `scripts/live-checks.sh` runs under a guard that kills the load and sets full speed at 85 °C, no load phase runs longer than 90 s, and the firmware-auto run happens once, after a cool-down. — ✓ live-checks 2026-11-18 16:56–17:06: guard tripped at 85 °C at 17:05:26, load killed, fans to full speed (en=0, 2900 RPM rising)
 - [x] ISC-32: After the load ends, the fans stop again once both curves are back at 0 % and the dwell has passed. — ✓ last reading ≥ 50 °C at 16:42:03.5, en 1→2 at 16:42:36.9 (dwell 30 s + CoolerControl's 2 s response delay), fans 0 RPM
 - [x] ISC-33: After `kill -9` of the plugin while the fans are in manual (light load), CoolerControl restarts it and the new instance writes firmware auto, or the script reports how long the fans stayed manual. — ✓ live-checks 2026-11-18 16:56–17:06: SIGKILL at light load, CoolerControl restarted the plugin after 1 s, new instance wrote firmware auto
@@ -186,7 +186,7 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 | ISC-28 | bash | paths written by install script | only listed | rg -n -e install -e cp -e mkdir install.sh | literal | normal | build |
 | ISC-29 | bash | 5-minute idle sampling | 0 RPM, enable=2 | bun scripts/sample.ts --idle 300 | literal | critical | integrity |
 | ISC-30 | bash | sampling under load | start within one cycle | bun scripts/sample.ts --load | literal | critical | integrity |
-| ISC-31 | bash | 90 s at 4 threads, plugin vs firmware auto, guarded, flag reset per run | lower peak | sudo scripts/live-checks.sh | literal | critical | integrity |
+| ISC-31 | manual | killed 2026-11-18 by the user: not measurable under the 85 °C limit | — | — | literal | normal | integrity |
 | ISC-32 | bash | sampling after load | 0 RPM after dwell | sudo scripts/live-checks.sh | literal | normal | integrity |
 | ISC-33 | bash | kill -9 at light load, sample sysfs | restarted and auto, or time reported | sudo scripts/live-checks.sh | literal | critical | integrity |
 | ISC-48 | bash | guard trips at 85 °C; phase lengths in the script | ≤ 90 s, guard present | rg -n -e GUARD_C -e LOAD_S scripts/live-checks.sh | literal | critical | build |
