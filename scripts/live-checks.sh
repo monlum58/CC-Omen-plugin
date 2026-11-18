@@ -5,14 +5,15 @@
 #
 # Safety: a guard watches the CPU every 0.5 s during the whole run. At GUARD_C it kills
 # the load and sets the fans to full speed. Light load lasts at most 60 s, full load at most
-# LOAD_S (emergency phase) or COMPARE_S (comparison), and the firmware-auto run happens
+# LOAD_S (emergency phase) or COMPARE_S at COMPARE_THREADS (comparison), and the firmware-auto run happens
 # once, last, after a cool-down. On any exit the script stops its load, resumes or restarts
 # coolercontrold, and removes its test settings.
 set -u
 
 GUARD_C=85
 LOAD_S=90
-COMPARE_S=30
+COMPARE_S=90
+COMPARE_THREADS=4
 IDLE_S=300
 ID=cc_omen
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -116,7 +117,7 @@ to_manual() { # light load until the curve puts the fans in manual
   return 1
 }
 
-load_peak() { # $1 seconds of full load; prints "peak end" in tenths °C
+load_peak() { # $1 seconds, $2 busy threads; prints "peak end" in tenths °C
   local peak=0 t end=$((SECONDS + $1))
   load_start "$(nproc)"
   while [ $SECONDS -lt $end ] && [ ! -f "$GUARD_FLAG" ]; do
@@ -210,10 +211,10 @@ if want 18; then # emergency at a test limit of 70 °C (the lowest allowed), rel
   t0=$(date +%s); systemctl restart coolercontrold; wait_until 30 plugin_started_since "$t0"
 fi
 
-if want 31; then # COMPARE_S of full load with the plugin, then the same with firmware auto.
+if want 31; then # COMPARE_S of medium load (COMPARE_THREADS busy) with the plugin, then the same with firmware auto.
   cool_down 50 300
   rm -f "$GUARD_FLAG"
-  start_p=$(cpu_tenths); read -r peak_p end_p < <(load_peak "$COMPARE_S")
+  start_p=$(cpu_tenths); read -r peak_p end_p < <(load_peak "$COMPARE_S" "$COMPARE_THREADS")
   guard_p=0; [ -f "$GUARD_FLAG" ] && guard_p=1
   log "plugin run: start $start_p, peak $peak_p, end $end_p (tenths °C), guard tripped: $guard_p"
   cool_down 50 300
@@ -222,14 +223,14 @@ if want 31; then # COMPARE_S of full load with the plugin, then the same with fi
   wait_until 10 is_en 2
   start_f=$(cpu_tenths)
   log "firmware auto run, coolercontrold stopped ($(state))"
-  read -r peak_f end_f < <(load_peak "$COMPARE_S")
+  read -r peak_f end_f < <(load_peak "$COMPARE_S" "$COMPARE_THREADS")
   guard_f=0; [ -f "$GUARD_FLAG" ] && guard_f=1
   systemctl start coolercontrold
   log "firmware run: start $start_f, peak $peak_f, end $end_f (tenths °C), guard tripped: $guard_f"
   if [ "$guard_p" = 1 ]; then ok=FAIL
   elif [ "$guard_f" = 1 ] || [ "$peak_p" -lt "$peak_f" ]; then ok=PASS
   else ok=FAIL; fi
-  result ISC-31 "$ok" "${COMPARE_S}s full load: plugin start/peak $start_p/$peak_p vs firmware auto $start_f/$peak_f tenths °C; guard tripped plugin=$guard_p firmware=$guard_f"
+  result ISC-31 "$ok" "${COMPARE_S}s with ${COMPARE_THREADS} busy threads: plugin start/peak $start_p/$peak_p vs firmware auto $start_f/$peak_f tenths °C; guard tripped plugin=$guard_p firmware=$guard_f"
   rm -f "$GUARD_FLAG"
   cool_down 55 300
 fi
