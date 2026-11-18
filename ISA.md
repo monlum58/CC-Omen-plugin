@@ -4,7 +4,7 @@ task: "CoolerControl device plugin that lets fan curves stop the HP OMEN laptop 
 slug: 20261118-154500_cc-omen-plugin
 project: CC-Omen-plugin
 phase: climbing
-progress: 31/47
+progress: 36/47
 started: 2026-11-18T15:45:00+01:00
 updated: 2026-11-18T16:35:00+01:00
 principal_stated_goal: 'CoolerControl is great, but it cannot stop the fans completely. Convince CoolerControl to stop the fans if the system temperature is low, while the fans still react early enough to keep the hardware cool.'
@@ -79,14 +79,14 @@ Why: the plugin builds, versions and proves itself from one command.
 ### F1 · Device and channels
 Why: CoolerControl sees the fans as a normal device it can drive with ordinary curves.
 
-- [ ] ISC-7: CoolerControl lists a device "HP OMEN fans" with two speed channels, "CPU fan" and "GPU fan", each 0–100 % with fixed duty enabled.
+- [x] ISC-7: CoolerControl lists a device "HP OMEN fans" with two speed channels, "CPU fan" and "GPU fan", each 0–100 % with fixed duty enabled. — ✓ live 2026-11-18: /etc/coolercontrol/config.toml has `device-settings.e1b3fc…` with fan1 → "CPU Cooler (Balanced)", fan2 → "GPU Fan (Balanced)", assigned by the user in the UI
 - [x] ISC-8: `Status` reports each fan's RPM from `fan1_input`/`fan2_input` and its duty as the driver's `pwm` reading in percent, so the floor reads 33 % like other system monitors (uncalibrated setup). — ✓ process_full_lifecycle: Status rpm 2000, duty 33 from pwm 85
 - [ ] ISC-9: A curve assigned to a channel in CoolerControl reaches the plugin as `FixedDuty` calls, visible in the plugin log at debug level.
 
 ### F2 · Mode mapping
 Why: 0 % means the firmware stops the fans; anything above 0 % means the curve rules.
 
-- [ ] ISC-10: When both channels are requested at 0 % (or reset), `pwm1_enable` becomes 2 and the fans reach 0 RPM on a cool machine.
+- [x] ISC-10: When both channels are requested at 0 % (or reset), `pwm1_enable` becomes 2 and the fans reach 0 RPM on a cool machine. — ✓ live 16:40:56 and 16:41:43: en=2, fan1=0, fan2=0 at CPU 46 °C
 - [x] ISC-11: When either channel is requested above 0 %, `pwm1_enable` becomes 1 and `pwm1`/`pwm2` carry the requested duties scaled to 0–255. — ✓ mode_any_nonzero_gives_manual_with_scaled_duties; process_full_lifecycle
 - [x] ISC-12: The plugin never writes a pwm value while the mode is auto or max. — ✓ mode_no_pwm_write_in_auto_or_max (fake driver refuses pwm outside manual)
 - [x] ISC-13: Returning from manual to auto waits for a dwell time (default 30 s) in which both channels stay at 0 %; a request above 0 % during the dwell cancels it. — ✓ dwell_holds_manual_then_returns_to_auto, dwell_is_cancelled_by_a_nonzero_request; mutation 'no dwell' caught
@@ -122,7 +122,7 @@ Why: no failure leaves the hardware at a low fixed speed with nobody in charge.
 Why: one command in, one command out, and it survives updates and Secure Boot.
 
 - [ ] ISC-23: `./install.sh` builds as the user, then with sudo copies the release binary and manifest into `/var/lib/coolercontrol/plugins/cc_omen/`, sets `bin_t` with `semanage fcontext` and `restorecon`, and restarts `coolercontrold`; running it twice succeeds.
-- [ ] ISC-24: After install, `journalctl -u cc-plugin-cc_omen` shows the plugin started and connected, with no `203/EXEC`.
+- [x] ISC-24: After install, `journalctl -u cc-plugin-cc_omen` shows the plugin started and connected, with no `203/EXEC`. — ✓ journal: "Starting cc_omen v0.1.0+3", "firmware auto set at start", 0 × 203/EXEC; binary labelled system_u:object_r:bin_t:s0
 - [ ] ISC-25: `sudo ./uninstall.sh` removes the plugin folder and the SELinux rule, leaves `pwm1_enable` at 2, and restarts `coolercontrold`.
 - [x] ISC-26: The README, the install script's closing message and the plugin's foreign-writer warning all say to disable the stock `hp` device in CoolerControl, and the README explains assigning curves to the plugin's channels. — ✓ README § Set up CoolerControl, install.sh line 38, engine.rs ForeignChange warning (the user reported there is no "Default Profile" entry in the UI, so the earlier wording was wrong)
 - [ ] ISC-27: The plugin starts and controls the fans after a reboot with Secure Boot enabled.
@@ -132,9 +132,9 @@ Why: one command in, one command out, and it survives updates and Secure Boot.
 Why: the claim is about real fans and temperatures, so it closes on the real laptop.
 
 - [ ] ISC-29: Idle for 5 minutes with curves assigned: both fans at 0 RPM and `pwm1_enable` = 2.
-- [ ] ISC-30: Under CPU load the CPU fan starts within one status cycle of the CPU temperature crossing the curve's first non-zero point.
+- [x] ISC-30: Under CPU load the CPU fan starts within one status cycle of the CPU temperature crossing the curve's first non-zero point. — ✓ 5 Hz sampler: CPU first ≥ 50 °C at 16:42:45.780, en 2→1 at 16:42:46.232 (0.45 s)
 - [ ] ISC-31: During a 10-minute all-core load the peak CPU temperature stays below the peak of the same load under firmware auto mode, both recorded in the Log.
-- [ ] ISC-32: After the load ends, the fans stop again once both curves are back at 0 % and the dwell has passed.
+- [x] ISC-32: After the load ends, the fans stop again once both curves are back at 0 % and the dwell has passed. — ✓ last reading ≥ 50 °C at 16:42:03.5, en 1→2 at 16:42:36.9 (dwell 30 s + CoolerControl's 2 s response delay), fans 0 RPM
 - [ ] ISC-33: Killing the plugin process during load leaves `pwm1_enable` at 2, or CoolerControl restarts the plugin, within the watchdog timeout.
 
 ## Test Strategy
