@@ -4,7 +4,7 @@ task: "CoolerControl device plugin that lets fan curves stop the HP OMEN laptop 
 slug: 20261118-154500_cc-omen-plugin
 project: CC-Omen-plugin
 phase: learn
-progress: 48/50
+progress: 50/50
 started: 2026-11-18T15:45:00+01:00
 updated: 2026-11-18T17:40:00+01:00
 principal_stated_goal: 'CoolerControl is great, but it cannot stop the fans completely. Convince CoolerControl to stop the fans if the system temperature is low, while the fans still react early enough to keep the hardware cool.'
@@ -142,8 +142,8 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 ### F6 · Public release
 Why: anyone with this laptop can install it without a Rust toolchain, and nothing personal goes public with it.
 
-- [ ] ISC-49: The GitHub repository is public with a clean privacy scan of files, history and issues, while the Forgejo mirror stays private.
-- [ ] ISC-50: GitHub release `v0.1.0` carries `cc_omen-0.1.0-x86_64-linux.tar.gz` with the binary, `manifest.toml`, `install.sh`, `uninstall.sh`, README and LICENSE, plus its SHA-256; unpacked, `install.sh` uses the bundled binary and never calls cargo.
+- [x] ISC-49: The GitHub repository is public with a clean privacy scan of files, history and issues, while the Forgejo mirror stays private. — ✓ 2026-11-18: privacy scan clean (files, 13 commits, issues) before publishing; `gh repo view` = PUBLIC, anonymous HTTP 200; Forgejo API private, anonymous HTTP 404
+- [x] ISC-50: GitHub release `v0.1.0` carries `cc_omen-0.1.0-x86_64-linux.tar.gz` with the binary, `manifest.toml`, `install.sh`, `uninstall.sh`, README and LICENSE, plus its SHA-256; unpacked, `install.sh` uses the bundled binary and never calls cargo. — ✓ release https://github.com/monlum58/CC-Omen-plugin/releases/tag/v0.1.0 (tag on cccf3b1, both forges): downloaded again, `sha256sum -c` OK, 7 tar entries; unpacked install.sh with stub cargo and sudo went straight to sudo, no cargo call; bundled binary reports 0.1.0+3
 - [x] ISC-32: After the load ends, the fans stop again once both curves are back at 0 % and the dwell has passed. — ✓ last reading ≥ 50 °C at 16:42:03.5, en 1→2 at 16:42:36.9 (dwell 30 s + CoolerControl's 2 s response delay), fans 0 RPM
 - [x] ISC-33: After `kill -9` of the plugin while the fans are in manual (light load), CoolerControl restarts it and the new instance writes firmware auto, or the script reports how long the fans stayed manual. — ✓ live-checks 2026-11-18 16:56–17:06: SIGKILL at light load, CoolerControl restarted the plugin after 1 s, new instance wrote firmware auto
 
@@ -228,4 +228,4 @@ Why: anyone with this laptop can install it without a Rust toolchain, and nothin
 
 ## Status
 
-Complete: 48/48 (ISC-31 killed by the user, the rest proven). Unit, property and process tests against a fake sysfs, 13 of 13 safety mutations caught, and live checks on the laptop: 0 RPM at idle, fans starting within 0.45 s of the curve, stopping after the dwell, watchdog at 15 s, emergency at a test limit, `kill -9` recovered in 1 s, suspend, reboot with Secure Boot, uninstall and reinstall. Public release needs the user's explicit go-ahead (`bun scripts/privacy-scan.ts` first).
+Complete: 50/50 (ISC-31 killed by the user, the rest proven). Public on GitHub with release v0.1.0 since 2026-11-18; the Forgejo mirror stays private. Unit, property and process tests against a fake sysfs, 13 of 13 safety mutations caught, and live checks on the laptop: 0 RPM at idle, fans starting within 0.45 s of the curve, stopping after the dwell, watchdog at 15 s, emergency at a test limit, `kill -9` recovered in 1 s, suspend, reboot with Secure Boot, uninstall and reinstall.
