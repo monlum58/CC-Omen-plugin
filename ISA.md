@@ -3,7 +3,7 @@ name: "CC-Omen-plugin"
 task: "CoolerControl device plugin that lets fan curves stop the HP OMEN laptop fans"
 slug: 20261118-154500_cc-omen-plugin
 project: CC-Omen-plugin
-phase: complete
+phase: learn
 progress: 48/48
 started: 2026-11-18T15:45:00+01:00
 updated: 2026-11-18T17:40:00+01:00
@@ -14,6 +14,9 @@ principal_stated_goal_locked: 2026-11-18T15:45:00+01:00
 context_sufficient: true
 interview_invoked: false
 absence_review: Opus@2026-11-18T15:58:00+01:00
+iteration: 2
+resumed_at: 2026-11-18T16:50:08.143Z
+resumed_from_phase: complete
 ---
 
 ## Ideal State
@@ -212,6 +215,8 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 - 2026-11-18 · Status reports duty from the driver's pwm reading, not the requested duty, so CoolerControl shows what the fans really do (33 % at the floor) even in firmware auto.
 - 2026-11-18 · an unreadable temperature means full speed, not firmware auto: a controller that cannot see the temperature should not bet on the firmware's late reaction.
 - 2026-11-18 · live checks are bounded by heat (the user: under firmware auto the laptop gets hot enough to switch itself off). ISC-31 shrank from a 10-minute to a 90-second load, and the `kill -9` test (ISC-33) runs at light load, because it tests how the plugin handles its state, not cooling. A guard at 85 °C covers every phase (ISC-48). This is a safety bound set by the user, not a softened criterion: both still compare or kill under the same conditions as before, only shorter and cooler.
+- 2026-11-18 · repository cleanup before going public (the user asked; ISC-6): `ISA.html` (a generated view of this file, committed by accident) was rewritten out of the whole history and is ignored from now on. `buf.yaml` (a template leftover for an unused linter) and `proptest-regressions/` (seeds recorded while the mutation checks broke the code on purpose) were removed. All commit hashes changed with the rewrite; the hashes quoted in issue comments refer to the old history.
+- D-auto-2026-11-18T16:50:08.143Z: Auto-resumed from complete to learn at 2026-11-18T16:50:08.143Z — iteration 2
 
 ## Status
 

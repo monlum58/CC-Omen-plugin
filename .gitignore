@@ -3,3 +3,4 @@
 .harness/
 .privacy-terms
 ISA.html
+proptest-regressions/
