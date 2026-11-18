@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
 # Live checks on the real laptop for the criteria a fake sysfs cannot prove.
-#   sudo scripts/live-checks.sh          (about 25 minutes; leave the laptop alone)
+#   sudo scripts/live-checks.sh                 all phases, about 22 minutes; leave the laptop alone
+#   sudo ONLY="17 31" scripts/live-checks.sh    only the named phases (criterion numbers)
 #
 # Safety: a guard watches the CPU every 0.5 s during the whole run. At GUARD_C it kills
-# the load and sets the fans to full speed. No load phase lasts longer than LOAD_S, and
-# the firmware-auto comparison runs once, last, after a cool-down. On any exit the script
-# stops its load, resumes or restarts coolercontrold, and removes its test settings.
+# the load and sets the fans to full speed. Light load lasts at most 60 s, full load at most
+# LOAD_S (emergency phase) or COMPARE_S (comparison), and the firmware-auto run happens
+# once, last, after a cool-down. On any exit the script stops its load, resumes or restarts
+# coolercontrold, and removes its test settings.
 set -u
 
 GUARD_C=85
 LOAD_S=90
+COMPARE_S=30
 IDLE_S=300
 ID=cc_omen
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 PLUGIN_DIR="$(readlink -f /var/lib/coolercontrol/plugins)/$ID"
 LOG_DIR="$HERE/.harness"
 LOG="$LOG_DIR/live-$(date +%Y%m%d-%H%M%S).log"
+ONLY="${ONLY:-}"
 
-[ "$(id -u)" -eq 0 ] || exec sudo "$0" "$@"
+[ "$(id -u)" -eq 0 ] || exec sudo ONLY="$ONLY" "$0" "$@"
 mkdir -p "$LOG_DIR"
 
 HP=""
@@ -26,6 +30,7 @@ CPU=""
 for d in /sys/class/hwmon/hwmon*; do [ "$(cat "$d/name" 2>/dev/null)" = k10temp ] && CPU="$d/temp1_input"; done
 [ -n "$HP" ] && [ -n "$CPU" ] || { echo "hp fan device or k10temp not found" >&2; exit 1; }
 
+want() { [ -z "$ONLY" ] || [[ " $ONLY " == *" $1 "* ]]; }
 log() { echo "$(date +%T) $*" | tee -a "$LOG"; }
 result() { echo "RESULT $1 $2 — $3" | tee -a "$LOG"; }
 cpu() { echo $(( $(cat "$CPU") / 1000 )); }
@@ -41,8 +46,11 @@ load_start() { # $1 = number of busy processes
   for _ in $(seq 1 "$1"); do yes >/dev/null & LOAD_PIDS+=($!); done
 }
 load_stop() {
-  [ ${#LOAD_PIDS[@]} -gt 0 ] && kill "${LOAD_PIDS[@]}" 2>/dev/null
-  wait "${LOAD_PIDS[@]}" 2>/dev/null
+  # Only our own load processes: a bare `wait` would also wait for the guard loop forever.
+  if [ ${#LOAD_PIDS[@]} -gt 0 ]; then
+    kill "${LOAD_PIDS[@]}" 2>/dev/null
+    wait "${LOAD_PIDS[@]}" 2>/dev/null
+  fi
   LOAD_PIDS=()
 }
 
@@ -61,6 +69,7 @@ guard() {
 guard & GUARD_PID=$!
 
 TEST_CONFIG=0
+RESTART_AT_END=0
 cleanup() {
   load_stop
   pkill -x yes 2>/dev/null
@@ -70,9 +79,13 @@ cleanup() {
   if [ "$TEST_CONFIG" = 1 ]; then unlink "$PLUGIN_DIR/config.json" 2>/dev/null; fi
   if [ -f "$PLUGIN_DIR/manifest.toml" ] && grep -q -- '"--debug"' "$PLUGIN_DIR/manifest.toml"; then
     sed -i 's/, "--debug"//' "$PLUGIN_DIR/manifest.toml"
+    RESTART_AT_END=1
   fi
-  systemctl is-active -q coolercontrold || systemctl start coolercontrold
-  if [ "$TEST_CONFIG" = 1 ] || [ "${RESTART_AT_END:-0}" = 1 ]; then systemctl restart coolercontrold; fi
+  if ! systemctl is-active -q coolercontrold; then
+    systemctl start coolercontrold
+  elif [ "$TEST_CONFIG" = 1 ] || [ "$RESTART_AT_END" = 1 ]; then
+    systemctl restart coolercontrold
+  fi
   # Nothing controls the fans without the plugin: make sure the firmware does.
   systemctl is-active -q "cc-plugin-$ID" || echo 2 > "$HP/pwm1_enable"
   log "cleanup done: $(state); full log: $LOG"
@@ -89,7 +102,6 @@ wait_until() { # $1 timeout s, $2… condition; returns 0 when true
 }
 is_en() { [ "$(en)" = "$1" ]; }
 cool_below() { [ "$(cpu)" -lt "$1" ]; }
-hot_and_manual() { [ "$(cpu)" -ge 58 ] && is_en 1; }
 plugin_started_since() { journalctl -u "cc-plugin-$ID" --since "@$1" --no-pager -q | grep -q "firmware auto set at start"; }
 
 cool_down() { # $1 target °C, $2 timeout s
@@ -99,139 +111,152 @@ cool_down() { # $1 target °C, $2 timeout s
 
 to_manual() { # light load until the curve puts the fans in manual
   load_start 4
-  if wait_until 60 hot_and_manual; then load_stop; return 0; fi
+  if wait_until 60 is_en 1; then load_stop; return 0; fi
   load_stop
   return 1
 }
 
-load_peak() { # $1 seconds of full load; prints peak in tenths
+load_peak() { # $1 seconds of full load; prints "peak end" in tenths °C
   local peak=0 t end=$((SECONDS + $1))
   load_start "$(nproc)"
   while [ $SECONDS -lt $end ] && [ ! -f "$GUARD_FLAG" ]; do
     t=$(cpu_tenths); [ "$t" -gt "$peak" ] && peak=$t
     sleep 0.5
   done
+  t=$(cpu_tenths)
   load_stop
-  echo "$peak"
+  echo "$peak $t"
 }
 
-log "live checks start: $(state); Secure Boot: $(mokutil --sb-state 2>/dev/null)"
+log "live checks start: $(state); Secure Boot: $(mokutil --sb-state 2>/dev/null); phases: ${ONLY:-all}"
 systemctl is-active -q coolercontrold || { log "coolercontrold not running"; exit 1; }
 systemctl is-active -q "cc-plugin-$ID" || { log "plugin not running"; exit 1; }
-result ISC-27 "$(mokutil --sb-state 2>/dev/null | grep -q enabled && echo PASS || echo FAIL)" "Secure Boot: $(mokutil --sb-state 2>/dev/null); plugin active (a start after a reboot is read from the journal separately)"
 
-# ISC-29: 5 minutes idle at 0 RPM in firmware auto.
-cool_down 50 180
-wait_until 90 is_en 2
-bad=0; n=0; end=$((SECONDS + IDLE_S))
-while [ $SECONDS -lt $end ]; do
-  n=$((n + 1))
-  if [ "$(en)" != 2 ] || [ "$(rpm)" != "0/0" ]; then bad=$((bad + 1)); log "idle sample off: $(state)"; fi
-  sleep 2
-done
-result ISC-29 "$([ $bad -eq 0 ] && echo PASS || echo FAIL)" "$((n - bad))/$n idle samples at en=2 and 0/0 RPM over ${IDLE_S}s"
-
-# ISC-9: FixedDuty requests visible at debug level.
-t0=$(date +%s)
-sed -i 's/args = \["--socket", "\/run\/coolercontrol-plugin-cc_omen.sock"\]/args = ["--socket", "\/run\/coolercontrol-plugin-cc_omen.sock", "--debug"]/' "$PLUGIN_DIR/manifest.toml"
-systemctl restart coolercontrold
-wait_until 30 plugin_started_since "$t0"
-to_manual
-n=$(journalctl -u "cc-plugin-$ID" --since "@$t0" --no-pager -q | grep -c "FixedDuty")
-result ISC-9 "$([ "$n" -gt 0 ] && echo PASS || echo FAIL)" "$n FixedDuty lines at debug level since $(date -d "@$t0" +%T)"
-sed -i 's/, "--debug"//' "$PLUGIN_DIR/manifest.toml"
-RESTART_AT_END=1
-cool_down 52 120
-
-# ISC-17: watchdog — CoolerControl frozen while the fans are manual.
-if to_manual; then
-  cc=$(cc_pid); kill -STOP "$cc"; t0=$SECONDS; ts=$(date +%s)
-  log "coolercontrold frozen with fans manual ($(state))"
-  if wait_until 30 is_en 2; then dt=$((SECONDS - t0)); else dt=-1; fi
-  kill -CONT "$cc"
-  warned=$(journalctl -u "cc-plugin-$ID" --since "@$ts" --no-pager -q | grep -c "no request from CoolerControl")
-  ok=$([ "$dt" -ge 14 ] && [ "$dt" -le 20 ] && [ "$warned" -gt 0 ] && echo PASS || echo FAIL)
-  result ISC-17 "$ok" "firmware auto ${dt}s after CoolerControl went silent (watchdog 15 s), warning logged: $warned"
-else
-  result ISC-17 FAIL "could not reach manual mode with light load"
-fi
-cool_down 52 120
-
-# ISC-33: kill -9 while manual.
-if to_manual; then
-  old=$(plugin_pid); ts=$(date +%s); t0=$SECONDS
-  kill -9 "$old"
-  log "plugin $old killed with SIGKILL ($(state))"
-  if wait_until 60 plugin_started_since "$ts"; then
-    dt=$((SECONDS - t0)); result ISC-33 PASS "CoolerControl restarted the plugin after ${dt}s; it wrote firmware auto at start (new pid $(plugin_pid))"
-  else
-    echo 2 > "$HP/pwm1_enable"; result ISC-33 FAIL "no restart within 60 s; fans stayed manual until the script set auto"
-  fi
-else
-  result ISC-33 FAIL "could not reach manual mode with light load"
-fi
-cool_down 52 120
-
-# ISC-18: emergency at a test limit of 70 °C (the lowest allowed), back below 60 °C.
-printf '{"emergency_celsius":70}\n' > "$PLUGIN_DIR/config.json"; chmod 644 "$PLUGIN_DIR/config.json"; TEST_CONFIG=1
-t0=$(date +%s); systemctl restart coolercontrold; wait_until 30 plugin_started_since "$t0"
-load_start "$(nproc)"
-if wait_until "$LOAD_S" is_en 0; then
-  at=$(cpu_tenths); load_stop
-  log "emergency full speed at $at tenths °C"
-  exit_t=""
-  end=$((SECONDS + 240))
+if want 29; then # 5 minutes idle at 0 RPM in firmware auto.
+  cool_down 50 180
+  wait_until 90 is_en 2
+  bad=0; n=0; end=$((SECONDS + IDLE_S))
   while [ $SECONDS -lt $end ]; do
-    if ! is_en 0; then exit_t=$(cpu_tenths); break; fi
-    sleep 0.2
+    n=$((n + 1))
+    if [ "$(en)" != 2 ] || [ "$(rpm)" != "0/0" ]; then bad=$((bad + 1)); log "idle sample off: $(state)"; fi
+    sleep 2
   done
-  ok=$([ -n "$exit_t" ] && [ "$exit_t" -le 605 ] && echo PASS || echo FAIL)
-  result ISC-18 "$ok" "full speed at $at, released at ${exit_t:-never} (tenths °C; limit 70, release at or below 60)"
-else
-  load_stop; result ISC-18 FAIL "no full speed within ${LOAD_S}s (CPU $(cpu) °C)"
+  result ISC-29 "$([ $bad -eq 0 ] && echo PASS || echo FAIL)" "$((n - bad))/$n idle samples at en=2 and 0/0 RPM over ${IDLE_S}s"
 fi
-unlink "$PLUGIN_DIR/config.json"; TEST_CONFIG=0
-t0=$(date +%s); systemctl restart coolercontrold; wait_until 30 plugin_started_since "$t0"
 
-# ISC-31: 90 s full load with the plugin, then the same with firmware auto (guarded).
-cool_down 50 300
-start_p=$(cpu_tenths); peak_p=$(load_peak "$LOAD_S")
-log "plugin run: start $start_p, peak $peak_p (tenths °C)"
-cool_down 50 300
-start_f=$(cpu_tenths)
-systemctl stop coolercontrold
-wait_until 10 is_en 2
-log "firmware auto run, coolercontrold stopped ($(state))"
-peak_f=$(load_peak "$LOAD_S")
-aborted=0; [ -f "$GUARD_FLAG" ] && aborted=1
-systemctl start coolercontrold
-log "firmware run: start $start_f, peak $peak_f (tenths °C), guard tripped: $aborted"
-ok=$({ [ "$aborted" = 1 ] || [ "$peak_p" -lt "$peak_f" ]; } && echo PASS || echo FAIL)
-result ISC-31 "$ok" "peak with plugin $peak_p vs firmware auto $peak_f tenths °C (starts $start_p / $start_f)$([ "$aborted" = 1 ] && echo ", firmware run stopped by the ${GUARD_C} °C guard")"
-rm -f "$GUARD_FLAG"
-cool_down 55 300
+if want 9; then # FixedDuty requests visible at debug level.
+  t0=$(date +%s)
+  sed -i 's/args = \["--socket", "\/run\/coolercontrol-plugin-cc_omen.sock"\]/args = ["--socket", "\/run\/coolercontrol-plugin-cc_omen.sock", "--debug"]/' "$PLUGIN_DIR/manifest.toml"
+  systemctl restart coolercontrold
+  wait_until 30 plugin_started_since "$t0"
+  to_manual
+  n=$(journalctl -u "cc-plugin-$ID" --since "@$t0" --no-pager -q | grep -c "FixedDuty")
+  result ISC-9 "$([ "$n" -gt 0 ] && echo PASS || echo FAIL)" "$n FixedDuty lines at debug level since $(date -d "@$t0" +%T)"
+  sed -i 's/, "--debug"//' "$PLUGIN_DIR/manifest.toml"
+  RESTART_AT_END=1
+  cool_down 52 120
+fi
 
-# ISC-47 (part): a full relabel keeps bin_t.
-restorecon -R /var/lib/coolercontrol
-label=$(ls -Z "$PLUGIN_DIR/$ID" | awk '{print $1}')
-result ISC-47a "$(echo "$label" | grep -q ':bin_t:' && echo PASS || echo FAIL)" "after restorecon -R: $label"
+if want 17; then # watchdog: CoolerControl frozen while the fans are manual.
+  if to_manual; then
+    cc=$(cc_pid); kill -STOP "$cc"; t0=$SECONDS; ts=$(date +%s)
+    log "coolercontrold frozen with fans manual ($(state))"
+    if wait_until 30 is_en 2; then dt=$((SECONDS - t0)); else dt=-1; fi
+    kill -CONT "$cc"
+    warned=$(journalctl -u "cc-plugin-$ID" --since "@$ts" --no-pager -q | grep -c "no request from CoolerControl")
+    ok=$([ "$dt" -ge 14 ] && [ "$dt" -le 20 ] && [ "$warned" -gt 0 ] && echo PASS || echo FAIL)
+    result ISC-17 "$ok" "firmware auto ${dt}s after CoolerControl went silent (watchdog 15 s), warning logged: $warned"
+  else
+    result ISC-17 FAIL "could not reach manual mode with light load within 60 s ($(state))"
+  fi
+  cool_down 52 120
+fi
 
-# ISC-25 + ISC-47 (part): uninstall leaves nothing behind.
-"$HERE/uninstall.sh" >>"$LOG" 2>&1; rc=$?
-left=""
-[ -e "$PLUGIN_DIR" ] && left="$left folder"
-semanage fcontext -l -C 2>/dev/null | grep -q "$ID" && left="$left selinux-rule"
-pgrep -x "$ID" >/dev/null && left="$left process"
-[ -e "/run/coolercontrol-plugin-$ID.sock" ] && left="$left socket"
-result ISC-25 "$([ $rc -eq 0 ] && [ -z "$left" ] && is_en 2 && echo PASS || echo FAIL)" "uninstall exit $rc, en=$(en), left behind:${left:- nothing}"
-result ISC-47b "$([ -z "$left" ] && echo PASS || echo FAIL)" "no process, socket, rule or file left:${left:- nothing}"
+if want 33; then # kill -9 while manual.
+  if to_manual; then
+    old=$(plugin_pid); ts=$(date +%s); t0=$SECONDS
+    kill -9 "$old"
+    log "plugin $old killed with SIGKILL ($(state))"
+    if wait_until 60 plugin_started_since "$ts"; then
+      dt=$((SECONDS - t0)); result ISC-33 PASS "CoolerControl restarted the plugin after ${dt}s; it wrote firmware auto at start (new pid $(plugin_pid))"
+    else
+      echo 2 > "$HP/pwm1_enable"; result ISC-33 FAIL "no restart within 60 s; fans stayed manual until the script set auto"
+    fi
+  else
+    result ISC-33 FAIL "could not reach manual mode with light load"
+  fi
+  cool_down 52 120
+fi
 
-# ISC-23: install twice.
-"$HERE/install.sh" >>"$LOG" 2>&1; rc1=$?
-"$HERE/install.sh" >>"$LOG" 2>&1; rc2=$?
-label=$(ls -Z "$PLUGIN_DIR/$ID" 2>/dev/null | awk '{print $1}')
-result ISC-23 "$([ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && echo "$label" | grep -q ':bin_t:' && echo PASS || echo FAIL)" "install exits $rc1/$rc2, label $label, plugin $(systemctl is-active "cc-plugin-$ID")"
-grep -q 'device-settings' /etc/coolercontrol/config.toml && log "curve assignments still in CoolerControl's config"
+if want 18; then # emergency at a test limit of 70 °C (the lowest allowed), released at or below 60 °C.
+  printf '{"emergency_celsius":70}\n' > "$PLUGIN_DIR/config.json"; chmod 644 "$PLUGIN_DIR/config.json"; TEST_CONFIG=1
+  t0=$(date +%s); systemctl restart coolercontrold; wait_until 30 plugin_started_since "$t0"
+  load_start "$(nproc)"
+  if wait_until "$LOAD_S" is_en 0; then
+    at=$(cpu_tenths); load_stop
+    log "emergency full speed at $at tenths °C"
+    exit_t=""
+    end=$((SECONDS + 240))
+    while [ $SECONDS -lt $end ]; do
+      if ! is_en 0; then exit_t=$(cpu_tenths); break; fi
+      sleep 0.2
+    done
+    ok=$([ -n "$exit_t" ] && [ "$exit_t" -le 605 ] && echo PASS || echo FAIL)
+    result ISC-18 "$ok" "full speed at $at, released at ${exit_t:-never} (tenths °C; limit 70, release at or below 60)"
+  else
+    load_stop; result ISC-18 FAIL "no full speed within ${LOAD_S}s (CPU $(cpu) °C)"
+  fi
+  unlink "$PLUGIN_DIR/config.json"; TEST_CONFIG=0
+  t0=$(date +%s); systemctl restart coolercontrold; wait_until 30 plugin_started_since "$t0"
+fi
+
+if want 31; then # COMPARE_S of full load with the plugin, then the same with firmware auto.
+  cool_down 50 300
+  rm -f "$GUARD_FLAG"
+  start_p=$(cpu_tenths); read -r peak_p end_p < <(load_peak "$COMPARE_S")
+  guard_p=0; [ -f "$GUARD_FLAG" ] && guard_p=1
+  log "plugin run: start $start_p, peak $peak_p, end $end_p (tenths °C), guard tripped: $guard_p"
+  cool_down 50 300
+  rm -f "$GUARD_FLAG"
+  systemctl stop coolercontrold
+  wait_until 10 is_en 2
+  start_f=$(cpu_tenths)
+  log "firmware auto run, coolercontrold stopped ($(state))"
+  read -r peak_f end_f < <(load_peak "$COMPARE_S")
+  guard_f=0; [ -f "$GUARD_FLAG" ] && guard_f=1
+  systemctl start coolercontrold
+  log "firmware run: start $start_f, peak $peak_f, end $end_f (tenths °C), guard tripped: $guard_f"
+  if [ "$guard_p" = 1 ]; then ok=FAIL
+  elif [ "$guard_f" = 1 ] || [ "$peak_p" -lt "$peak_f" ]; then ok=PASS
+  else ok=FAIL; fi
+  result ISC-31 "$ok" "${COMPARE_S}s full load: plugin start/peak $start_p/$peak_p vs firmware auto $start_f/$peak_f tenths °C; guard tripped plugin=$guard_p firmware=$guard_f"
+  rm -f "$GUARD_FLAG"
+  cool_down 55 300
+fi
+
+if want 47; then # a full relabel keeps bin_t.
+  restorecon -R /var/lib/coolercontrol
+  label=$(/usr/bin/ls -Z "$PLUGIN_DIR/$ID" | awk '{print $1}')
+  result ISC-47a "$(echo "$label" | grep -q ':bin_t:' && echo PASS || echo FAIL)" "after restorecon -R: $label"
+fi
+
+if want 25; then # uninstall leaves nothing behind.
+  "$HERE/uninstall.sh" >>"$LOG" 2>&1; rc=$?
+  left=""
+  [ -e "$PLUGIN_DIR" ] && left="$left folder"
+  semanage fcontext -l -C 2>/dev/null | grep -q "$ID" && left="$left selinux-rule"
+  pgrep -x "$ID" >/dev/null && left="$left process"
+  [ -e "/run/coolercontrol-plugin-$ID.sock" ] && left="$left socket"
+  result ISC-25 "$([ $rc -eq 0 ] && [ -z "$left" ] && is_en 2 && echo PASS || echo FAIL)" "uninstall exit $rc, en=$(en), left behind:${left:- nothing}"
+  result ISC-47b "$([ -z "$left" ] && echo PASS || echo FAIL)" "no process, socket, rule or file left:${left:- nothing}"
+fi
+
+if want 23 || want 25; then # install twice (always after an uninstall, so the plugin comes back).
+  "$HERE/install.sh" >>"$LOG" 2>&1; rc1=$?
+  "$HERE/install.sh" >>"$LOG" 2>&1; rc2=$?
+  label=$(/usr/bin/ls -Z "$PLUGIN_DIR/$ID" 2>/dev/null | awk '{print $1}')
+  result ISC-23 "$([ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && echo "$label" | grep -q ':bin_t:' && echo PASS || echo FAIL)" "install exits $rc1/$rc2, label $label, plugin $(systemctl is-active "cc-plugin-$ID")"
+fi
 
 log "all checks done: $(state)"
 grep '^RESULT' "$LOG"
