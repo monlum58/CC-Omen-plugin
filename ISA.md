@@ -124,7 +124,7 @@ Why: one command in, one command out, and it survives updates and Secure Boot.
 - [ ] ISC-23: `./install.sh` builds as the user, then with sudo copies the release binary and manifest into `/var/lib/coolercontrol/plugins/cc_omen/`, sets `bin_t` with `semanage fcontext` and `restorecon`, and restarts `coolercontrold`; running it twice succeeds.
 - [ ] ISC-24: After install, `journalctl -u cc-plugin-cc_omen` shows the plugin started and connected, with no `203/EXEC`.
 - [ ] ISC-25: `sudo ./uninstall.sh` removes the plugin folder and the SELinux rule, leaves `pwm1_enable` at 2, and restarts `coolercontrold`.
-- [x] ISC-26: The README explains keeping the stock `hp` device unmanaged in CoolerControl and assigning curves to the plugin's channels. — ✓ README § Set up CoolerControl
+- [x] ISC-26: The README, the install script's closing message and the plugin's foreign-writer warning all say to disable the stock `hp` device in CoolerControl, and the README explains assigning curves to the plugin's channels. — ✓ README § Set up CoolerControl, install.sh line 38, engine.rs ForeignChange warning (the user reported there is no "Default Profile" entry in the UI, so the earlier wording was wrong)
 - [ ] ISC-27: The plugin starts and controls the fans after a reboot with Secure Boot enabled.
 - [x] ISC-28: Anti: the install script writes nothing outside `/var/lib/coolercontrol/plugins/cc_omen/` and the SELinux file-context rule. — ✓ install.sh writes plugin folder + one semanage rule only (read)
 
@@ -180,7 +180,7 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 | ISC-23 | bash | install run twice, label checked | exit 0, bin_t | ls -Z /var/lib/coolercontrol/plugins/cc_omen | literal | critical | integrity |
 | ISC-24 | bash | service log after install | started, no 203 | journalctl -u cc-plugin-cc_omen | literal | critical | integrity |
 | ISC-25 | bash | uninstall, then folder, rule and sysfs | removed, enable=2 | cat /sys/class/hwmon/*/pwm1_enable | literal | normal | integrity |
-| ISC-26 | bash | README section present | present | rg -n 'Default Profile' README.md | literal | normal | build |
+| ISC-26 | bash | disable instruction present in all three places | present | rg -n -i 'disable the stock' README.md install.sh src/engine.rs | literal | normal | build |
 | ISC-27 | bash | Secure Boot on, then ISC-24 and ISC-10 | all true | mokutil --sb-state | literal | critical | integrity |
 | ISC-28 | bash | paths written by install script | only listed | rg -n -e install -e cp -e mkdir install.sh | literal | normal | build |
 | ISC-29 | bash | 5-minute idle sampling | 0 RPM, enable=2 | bun scripts/sample.ts --idle 300 | literal | critical | integrity |

@@ -35,7 +35,7 @@ systemctl restart coolercontrold
 echo "restarted coolercontrold; waiting for the plugin to start"
 for _ in $(seq 1 30); do
   if journalctl -u "cc-plugin-$ID" --since "-60s" --no-pager -q 2>/dev/null | grep -q "firmware auto set at start"; then
-    echo "plugin running. Next: in CoolerControl, set the stock 'hp' device to Default Profile (or disable it)"
+    echo "plugin running. Next: in CoolerControl, disable the stock 'hp' device (if not done yet)"
     echo "and assign your curves to 'HP OMEN fans' > CPU fan / GPU fan."
     exit 0
   fi

@@ -46,7 +46,7 @@ It builds as your user, then uses `sudo` to copy the binary and `manifest.toml` 
 
 ## Set up CoolerControl
 
-1. Set the stock **hp** device's fans to **Default Profile**, or disable the device. Only the plugin may write to the fans; if something else changes the mode, the plugin restores it and logs a warning.
+1. **Disable the stock `hp` device** in CoolerControl (in its device settings, like any other sensor you hide). Only the plugin may write to the fans; if something else changes the mode, the plugin restores it and logs a warning.
 2. Assign your curves to **HP OMEN fans → CPU fan** and **GPU fan**. Use 0 % below the temperature where the fans should stop, for example a CPU curve that stays at 0 % up to 50 °C.
 3. Calibration is optional. Uncalibrated, a channel shows the driver's pwm as a percent, so the floor of about 2000 RPM reads as 33 %, the same as other system monitors. Curve values between 1 % and 33 % all run at that floor.
 

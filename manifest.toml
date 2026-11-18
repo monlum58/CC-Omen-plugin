@@ -2,7 +2,7 @@
 id = "cc_omen"
 type = "device"
 description = "HP OMEN 16 fans: 0 % on both channels hands the fans to the firmware, which stops them when cool."
-version = "0.1.0+2"
+version = "0.1.0+3"
 url = "https://github.com/monlum58/CC-Omen-plugin"
 address = "/run/coolercontrol-plugin-cc_omen.sock"
 executable = "cc_omen"

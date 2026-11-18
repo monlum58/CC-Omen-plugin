@@ -160,7 +160,7 @@ impl Engine {
                     if self.foreign_warned_at.is_none_or(|t| now.saturating_sub(t) > 60_000) {
                         warn!(
                             "fan mode changed outside the plugin ({expected:?} -> {found:?}); restoring. \
-                             If this repeats, set the stock 'hp' device in CoolerControl to Default Profile or disable it."
+                             If this repeats, disable the stock 'hp' device in CoolerControl."
                         );
                         self.foreign_warned_at = Some(now);
                     } else {
