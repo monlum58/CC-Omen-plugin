@@ -1,0 +1,11 @@
+# CoolerControl device-service plugin manifest
+id = "cc_omen"
+type = "device"
+description = "HP OMEN 16 fans: 0 % on both channels hands the fans to the firmware, which stops them when cool."
+version = "0.1.0+2"
+url = "https://github.com/monlum58/CC-Omen-plugin"
+address = "/run/coolercontrol-plugin-cc_omen.sock"
+executable = "cc_omen"
+args = ["--socket", "/run/coolercontrol-plugin-cc_omen.sock"]
+# Root is needed to write the hp-wmi hwmon files.
+privileged = true

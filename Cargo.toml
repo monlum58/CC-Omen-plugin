@@ -1,0 +1,39 @@
+[package]
+name = "cc_omen"
+version = "0.1.0"
+description = "CoolerControl device plugin that lets fan curves stop the HP OMEN 16 fans"
+license = "GPL-3.0-or-later"
+readme = "README.md"
+rust-version = "1.86.0"
+edition = "2024"
+
+[dependencies]
+log = "0.4.28"
+env_logger = "0.11.8"
+systemd-journal-logger = "2.2.2"
+clap = { version = "4.5.50", features = ["derive"] }
+anyhow = "1.0.100"
+tonic = "0.14.2"
+prost = "0.14.1"
+tonic-prost = "0.14.2"
+tokio = { version = "1.48.0", features = ["macros", "rt", "signal", "fs", "time", "net", "sync"] }
+tokio-util = "0.7.16"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+libc = "0.2"
+
+[dev-dependencies]
+proptest = "1"
+tempfile = "3"
+tokio = { version = "1.48.0", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tower = "0.5"
+
+[build-dependencies]
+tonic-prost-build = "0.14.2"
+
+[profile.release]
+strip = "symbols"
+opt-level = 3
+lto = "fat"
+codegen-units = 1

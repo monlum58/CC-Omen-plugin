@@ -3,17 +3,17 @@ name: "CC-Omen-plugin"
 task: "CoolerControl device plugin that lets fan curves stop the HP OMEN laptop fans"
 slug: 20261118-154500_cc-omen-plugin
 project: CC-Omen-plugin
-phase: marking
-progress: 0/32
+phase: climbing
+progress: 28/47
 started: 2026-11-18T15:45:00+01:00
-updated: 2026-11-18T15:45:00+01:00
+updated: 2026-11-18T16:35:00+01:00
 principal_stated_goal: 'CoolerControl is great, but it cannot stop the fans completely. Convince CoolerControl to stop the fans if the system temperature is low, while the fans still react early enough to keep the hardware cool.'
 principal_stated_goal_source: conversation 2026-11-18
 principal_stated_goal_signal: 3
 principal_stated_goal_locked: 2026-11-18T15:45:00+01:00
 context_sufficient: true
 interview_invoked: false
-absence_review: skipped — plan-only commit; owed before F2/F3 code is written
+absence_review: Opus@2026-11-18T15:58:00+01:00
 ---
 
 ## Ideal State
@@ -69,50 +69,64 @@ Open the lid, read mail, write code: the laptop is silent. Start a build; at the
 ### F0 · Project
 Why: the plugin builds, versions and proves itself from one command.
 
-- [ ] ISC-1: `cargo test` and `cargo build --release` pass on a clean checkout.
+- [x] ISC-1: `cargo test` and `cargo build --release` pass on a clean checkout. — ✓ cargo test 33+6 green; cargo build --release --locked ok
 - [ ] ISC-2: A git pre-commit hook raises the build number in `version.properties` on every commit that changes plugin code, and the plugin reports that version to CoolerControl.
 - [ ] ISC-3: The GitHub repository and its mirror are private until a publish decision, and both `main` branches equal local `main`.
 - [ ] ISC-4: Every issue exists on both forges under the same number and title.
-- [ ] ISC-5: Anti: no tracked file is Python, and no script or doc invokes npm or npx.
-- [ ] ISC-6: Anti: no tracked file, issue or commit message contains a personal name, private hostname, home-directory path or e-mail address other than the GitHub noreply address.
+- [x] ISC-5: Anti: no tracked file is Python, and no script or doc invokes npm or npx. — ✓ git ls-files: 0 .py; rg npm/npx only in this ISA's own criterion text
+- [x] ISC-6: Anti: no tracked file, issue or commit message contains a personal name, private hostname, home-directory path or e-mail address other than the GitHub noreply address. — ✓ bun scripts/privacy-scan.ts clean (files, commits, issues); planted leak caught
 
 ### F1 · Device and channels
 Why: CoolerControl sees the fans as a normal device it can drive with ordinary curves.
 
 - [ ] ISC-7: CoolerControl lists a device "HP OMEN fans" with two speed channels, "CPU fan" and "GPU fan", each 0–100 % with fixed duty enabled.
-- [ ] ISC-8: `Status` reports each fan's RPM from `fan1_input`/`fan2_input` and the duty last requested for that channel.
+- [x] ISC-8: `Status` reports each fan's RPM from `fan1_input`/`fan2_input` and its duty as the driver's `pwm` reading in percent, so the floor reads 33 % like other system monitors (uncalibrated setup). — ✓ process_full_lifecycle: Status rpm 2000, duty 33 from pwm 85
 - [ ] ISC-9: A curve assigned to a channel in CoolerControl reaches the plugin as `FixedDuty` calls, visible in the plugin log at debug level.
 
 ### F2 · Mode mapping
 Why: 0 % means the firmware stops the fans; anything above 0 % means the curve rules.
 
 - [ ] ISC-10: When both channels are requested at 0 % (or reset), `pwm1_enable` becomes 2 and the fans reach 0 RPM on a cool machine.
-- [ ] ISC-11: When either channel is requested above 0 %, `pwm1_enable` becomes 1 and `pwm1`/`pwm2` carry the requested duties scaled to 0–255.
-- [ ] ISC-12: The plugin never writes a pwm value while the mode is auto or max.
-- [ ] ISC-13: Returning from manual to auto waits for a dwell time (default 30 s) in which both channels stay at 0 %; a request above 0 % during the dwell cancels it.
-- [ ] ISC-14: Dwell time, emergency temperature and watchdog timeout are read from the plugin's `config.json`, with defaults when it is missing or malformed.
-- [ ] ISC-15: The mode logic runs against a fake sysfs directory in unit tests covering every transition (auto→manual, manual→auto with and without dwell, one channel at zero, reset, emergency).
+- [x] ISC-11: When either channel is requested above 0 %, `pwm1_enable` becomes 1 and `pwm1`/`pwm2` carry the requested duties scaled to 0–255. — ✓ mode_any_nonzero_gives_manual_with_scaled_duties; process_full_lifecycle
+- [x] ISC-12: The plugin never writes a pwm value while the mode is auto or max. — ✓ mode_no_pwm_write_in_auto_or_max (fake driver refuses pwm outside manual)
+- [x] ISC-13: Returning from manual to auto waits for a dwell time (default 30 s) in which both channels stay at 0 %; a request above 0 % during the dwell cancels it. — ✓ dwell_holds_manual_then_returns_to_auto, dwell_is_cancelled_by_a_nonzero_request; mutation 'no dwell' caught
+- [x] ISC-14: Dwell time, emergency temperature and watchdog timeout are read from the plugin's `config.json`, with defaults when it is missing or malformed. — ✓ config_* tests (5)
+- [x] ISC-15: The mode logic runs against a fake sysfs directory in unit tests covering every transition (auto→manual, manual→auto with and without dwell, one channel at zero, reset, emergency). — ✓ control::tests transitions, dwell, emergency, reset, one channel zero
 
 ### F3 · Safety
 Why: no failure leaves the hardware at a low fixed speed with nobody in charge.
 
-- [ ] ISC-16: On `Shutdown`, SIGTERM, SIGINT or a panic, the plugin sets `pwm1_enable` to 2 before exiting.
+- [x] ISC-16: On `Shutdown`, SIGTERM, SIGINT or a panic, the plugin sets `pwm1_enable` to 2 before exiting. — ✓ process_full_lifecycle (SIGTERM), process_shutdown_rpc_hands_fans_back, panic_hook_hands_fans_to_firmware; mutations caught
 - [ ] ISC-17: If no RPC arrives for the watchdog timeout (default 15 s) while in manual mode, the plugin sets firmware auto and logs it.
 - [ ] ISC-18: If the CPU temperature reaches the emergency limit (default 95 °C), the plugin sets `pwm1_enable` to 0 (full speed) until it falls 10 °C below the limit, whatever CoolerControl asks.
 - [ ] ISC-19: After suspend and resume, the requested mode and duties are applied again within one status cycle.
-- [ ] ISC-20: At start the plugin refuses to run, with a clear log line, unless an hwmon device named `hp` with `pwm1_enable`, `pwm1` and `pwm2` exists.
-- [ ] ISC-21: Anti: the plugin never writes any file outside the `hp` hwmon directory and its own plugin folder.
-- [ ] ISC-22: Anti: no sequence of RPCs and clock ticks leaves the fans in manual mode with no RPC received for longer than the watchdog timeout (probe: property test over random sequences against the fake sysfs).
+- [x] ISC-20: At start the plugin refuses to run, with a clear log line, unless an hwmon device named `hp` with `pwm1_enable`, `pwm1` and `pwm2` exists. — ✓ process_refuses_without_the_fan_interface, process_refuses_without_a_cpu_sensor
+- [x] ISC-21: Anti: the plugin never writes any file outside the `hp` hwmon directory, its own socket and its own plugin folder. — ✓ only hw::write_attr (3 fixed names) and hw::force_auto open files for writing; socket in /run
+- [x] ISC-22: Anti: no sequence of RPCs and clock ticks leaves the fans in manual mode with no RPC received for longer than the watchdog timeout (probe: property test over random sequences against the fake sysfs). — ✓ proptest_never_manual_without_a_live_controller; mutation 'watchdog never trips' caught
+- [x] ISC-34: Anti: a CPU temperature that cannot be read is never treated as cool: three failed reads in a row force full speed, and a missing sensor at start refuses to start. — ✓ temp_failure_forces_full_speed_after_three_reads, temp_failure_in_engine_forces_full_speed; mutation caught
+- [x] ISC-35: The control loop runs on its own timer, so the emergency limit and the watchdog act even when no RPC arrives. — ✓ emergency_without_rpc; control loop on its own tokio interval (main.rs)
+- [x] ISC-36: A panic in any thread or task sets `pwm1_enable` to 2 and ends the process, so a half-dead plugin never keeps answering RPCs. — ✓ panic_hook_hands_fans_to_firmware; hook aborts the process in service mode; mutation caught
+- [x] ISC-37: On start the plugin writes firmware auto before it serves, and never trusts the state a dead instance left behind. — ✓ process_start_writes_auto_before_anything_else, process_full_lifecycle; mutation caught
+- [x] ISC-38: Anti: only the hwmon device named `hp` is ever written, found by name (never by index); on a board other than 8BCA the plugin refuses to start unless `--allow-any-board` is given. — ✓ discovery_finds_hp_by_name_and_ignores_decoys, process_refuses_a_foreign_board_unless_allowed
+- [x] ISC-39: Anti: the socket lives in `/run`, is owned by root with mode 0600, and a non-socket file or symlink at its path is never deleted or followed. — ✓ process_full_lifecycle (0600, owner), process_never_deletes_a_non_socket_at_the_socket_path; mutation caught
+- [x] ISC-40: Anti: `config.json` cannot weaken the safety paths: values are clamped to documented bounds, unknown keys or malformed JSON fall back to defaults with a log line, and a file that is a symlink, not owned by the plugin user, or writable by group or others is ignored. — ✓ config_bad_values_are_clamped_with_a_note, config_malformed_or_unknown_keys_fall_back_to_defaults, config_unsafe_files_are_ignored; mutation caught
+- [x] ISC-41: When another program changes `pwm1_enable` (for example the stock `hp` device still managed in CoolerControl), the plugin restores its state and logs a warning that names the likely cause. — ✓ foreign_writer_is_corrected_and_reported; mutation caught
+- [x] ISC-42: Anti: a failed sysfs write is never recorded as applied; it is logged and retried on the next tick, and `pwm1_enable = 1` is always written before any duty. — ✓ write_failure_is_not_applied_and_retried, write_failure_retried_on_next_cycle; mutation caught
+- [x] ISC-43: Anti: nothing is written to sysfs while the requested state is unchanged, and requests alternating between 0 % and 1 % every second cause at most one manual-to-auto switch per dwell window. — ✓ churn_no_writes_when_unchanged, churn_alternating_requests_switch_to_auto_at_most_once_per_dwell; mutation caught
+- [x] ISC-44: Anti: neither the watchdog, the dwell nor any RPC ends emergency full speed before the CPU is at or below the limit minus 10 °C. — ✓ emergency_overrides_everything_until_limit_minus_hysteresis; mutation caught
+- [x] ISC-45: After the `hp` hwmon device disappears and returns under another number (driver rebind, resume), the plugin finds it again without a restart. — ✓ rediscover_after_the_device_moves
+- [x] ISC-46: Anti: no request field ever reaches a filesystem path; every `int32` duty maps into 0–255, with 0 → 0, 100 → 255 and out-of-range values clamped. — ✓ duty_scale_every_int32 (proptest), duty_scale_endpoints; unknown channel refused in process_full_lifecycle; mutation caught
+- [ ] ISC-47: Anti: install labels with `semanage fcontext` plus `restorecon` (so a later `restorecon -R` keeps `bin_t`) and never touches `setenforce`; uninstall leaves no process, socket, SELinux rule or file behind.
 
 ### F4 · Install and lifecycle
 Why: one command in, one command out, and it survives updates and Secure Boot.
 
-- [ ] ISC-23: `sudo ./install.sh` builds or copies the release binary and manifest into `/var/lib/coolercontrol/plugins/cc_omen/`, sets `bin_t` with `semanage fcontext` and `restorecon`, and restarts `coolercontrold`; running it twice succeeds.
+- [ ] ISC-23: `./install.sh` builds as the user, then with sudo copies the release binary and manifest into `/var/lib/coolercontrol/plugins/cc_omen/`, sets `bin_t` with `semanage fcontext` and `restorecon`, and restarts `coolercontrold`; running it twice succeeds.
 - [ ] ISC-24: After install, `journalctl -u cc-plugin-cc_omen` shows the plugin started and connected, with no `203/EXEC`.
 - [ ] ISC-25: `sudo ./uninstall.sh` removes the plugin folder and the SELinux rule, leaves `pwm1_enable` at 2, and restarts `coolercontrold`.
-- [ ] ISC-26: The README explains keeping the stock `hp` device unmanaged in CoolerControl and assigning curves to the plugin's channels.
+- [x] ISC-26: The README explains keeping the stock `hp` device unmanaged in CoolerControl and assigning curves to the plugin's channels. — ✓ README § Set up CoolerControl
 - [ ] ISC-27: The plugin starts and controls the fans after a reboot with Secure Boot enabled.
-- [ ] ISC-28: Anti: the install script writes nothing outside `/var/lib/coolercontrol/plugins/cc_omen/` and the SELinux file-context rule.
+- [x] ISC-28: Anti: the install script writes nothing outside `/var/lib/coolercontrol/plugins/cc_omen/` and the SELinux file-context rule. — ✓ install.sh writes plugin folder + one semanage rule only (read)
 
 ### F5 · Real-machine proof
 Why: the claim is about real fans and temperatures, so it closes on the real laptop.
@@ -149,6 +163,20 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 | ISC-20 | bash | binary against empty fake sysfs | non-zero exit with message | cargo test refuse | literal | normal | build |
 | ISC-21 | bash | write paths in source and under strace | only allowed paths | rg 'write\(' src | literal | critical | build |
 | ISC-22 | bash | property test over random RPC and clock sequences | invariant holds | cargo test proptest | literal | critical | build |
+| ISC-34 | bash | fake temp file removed or garbage for 3 ticks | enable=0 | cargo test temp_failure | literal | critical | build |
+| ISC-35 | bash | no RPCs, fake temp 96 °C, ticks only | enable=0 | cargo test emergency_without_rpc | literal | critical | build |
+| ISC-36 | bash | panic in a spawned thread with hook installed | enable=2 | cargo test panic_hook | literal | critical | build |
+| ISC-37 | bash | start binary on fake sysfs with enable=1 | enable=2 before first RPC | cargo test --test process | literal | critical | build |
+| ISC-38 | bash | fake sysfs with a decoy pwm device and a foreign board | only hp written, foreign board refused | cargo test discovery | literal | critical | build |
+| ISC-39 | bash | socket mode and owner; planted regular file survives | 0600, file intact | cargo test --test process | literal | critical | build |
+| ISC-40 | bash | table of bad configs and bad file permissions | clamped or ignored | cargo test config | literal | critical | build |
+| ISC-41 | bash | external write of enable=1 while auto | restored and warned | cargo test foreign_writer | literal | normal | build |
+| ISC-42 | bash | fake pwm write failure | not applied, retried, enable before duty | cargo test write_failure | literal | critical | build |
+| ISC-43 | bash | unchanged requests and 0/1 % alternation | no writes; one switch per dwell | cargo test churn | literal | normal | build |
+| ISC-44 | bash | 96 °C, watchdog expiry, RPCs, then cooling | exit only at limit−10 | cargo test emergency | literal | critical | build |
+| ISC-45 | bash | hwmon dir renamed in fake sysfs | rediscovered | cargo test rediscover | literal | normal | build |
+| ISC-46 | bash | property test over all int32 duties | 0..=255 | cargo test duty_scale | literal | critical | build |
+| ISC-47 | bash | restorecon -R after install; uninstall leftovers | bin_t kept; nothing left | ls -Z /var/lib/coolercontrol/plugins/cc_omen | literal | normal | integrity |
 | ISC-23 | bash | install run twice, label checked | exit 0, bin_t | ls -Z /var/lib/coolercontrol/plugins/cc_omen | literal | critical | integrity |
 | ISC-24 | bash | service log after install | started, no 203 | journalctl -u cc-plugin-cc_omen | literal | critical | integrity |
 | ISC-25 | bash | uninstall, then folder, rule and sysfs | removed, enable=2 | cat /sys/class/hwmon/*/pwm1_enable | literal | normal | integrity |
@@ -176,8 +204,12 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 - 2026-11-18 · no milestones: about ten issues, tracked from the plan issue #1.
 - 2026-11-18 · public-ready from day one: no personal data anywhere (ISC-6).
 - 2026-11-18 · finding: the in-tree driver clamps manual writes to `min_rpm` from the BIOS fan table (`clamp_val(rpm, priv->min_rpm, priv->max_rpm)` in `hp_wmi_hwmon_write`); reproduced when a manual write of 0 read back as `pwm1=85` at 2000 RPM. Firmware auto at 49 °C gave 0 RPM on both fans.
-- 2026-11-18 · absence review skipped for the plan commit; owed before F2/F3 code.
+- 2026-11-18 · absence review: a fresh Opus reviewer saw only the ladder, problem, constraints and out-of-scope; 15 findings, adopted as ISC-34–47 (two folded into ISC-36 and ISC-47). Rebutted: NaN duties (the protocol duty is `int32`). SIGKILL cannot be caught by any handler; the README says so and ISC-33 tests what happens after it.
+- 2026-11-18 · CoolerControl stays uncalibrated: a channel shows pwm/255 as its percent, so the driver floor (pwm 85, about 2000 RPM) reads as 33 %. Curve values from 1 % to 33 % all run at the floor.
+- 2026-11-18 · mutation run: the first pass let "SIGTERM does not hand back" survive because `stop()` already writes auto through the controller (an equivalent mutant); the mutation now removes the `stop()` call itself and is caught. A refuse-to-start test hung for 15 minutes on a mutant that kept running; refuse tests now kill the plugin after 10 s and fail.
+- 2026-11-18 · Status reports duty from the driver's pwm reading, not the requested duty, so CoolerControl shows what the fans really do (33 % at the floor) even in firmware auto.
+- 2026-11-18 · an unreadable temperature means full speed, not firmware auto: a controller that cannot see the temperature should not bet on the firmware's late reaction.
 
 ## Status
 
-Plan only. Nothing is built or installed.
+Built and proven against a fake sysfs: 28/47 criteria closed. 13 of 13 deliberate breaks of a safety guard are caught (`bun scripts/mutate.ts`). Open: everything that needs the plugin installed in CoolerControl and the real fans (ISC-7, 9, 10, 17–19, 23–25, 27, 29–33, 47), plus the forge criteria until the push (ISC-2–4). Next: the user runs `./install.sh`, then the live checks.

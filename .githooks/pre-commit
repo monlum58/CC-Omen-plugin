@@ -1,0 +1,3 @@
+#!/bin/sh
+# Raise the build number on every commit that changes plugin code.
+exec bun scripts/bump-version.ts
