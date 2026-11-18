@@ -74,7 +74,7 @@ Why: the plugin builds, versions and proves itself from one command.
 - [x] ISC-3: The GitHub repository and its mirror are private until a publish decision, and both `main` branches equal local `main`. — ✓ gh visibility PRIVATE; both main = 8615697
 - [x] ISC-4: Every issue exists on both forges under the same number and title. — ✓ #1–#10 created in order on both; open set #1, #8, #10 on both
 - [x] ISC-5: Anti: no tracked file is Python, and no script or doc invokes npm or npx. — ✓ git ls-files: 0 .py; rg npm/npx only in this ISA's own criterion text
-- [x] ISC-6: Anti: no tracked file, issue or commit message contains a personal name, private hostname, home-directory path or e-mail address other than the GitHub noreply address. — ✓ bun scripts/privacy-scan.ts clean (files, commits, issues); planted leak caught
+- [x] ISC-6: Anti: no tracked file, issue or commit message contains a personal name, private hostname, home-directory path or e-mail address other than a noreply address. — ✓ bun scripts/privacy-scan.ts clean (files, 2 commits, issues). It matches generic e-mail, home-path and LAN-address patterns plus the terms in the git-ignored `.privacy-terms`, as whole words ("monitor" is no hit), with `!token` lines allowing the public GitHub handle. A planted file with an e-mail, a home path and two listed terms gave 4 findings and exit 1.
 
 ### F1 · Device and channels
 Why: CoolerControl sees the fans as a normal device it can drive with ordinary curves.
