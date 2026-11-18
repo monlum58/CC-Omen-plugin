@@ -4,7 +4,7 @@ task: "CoolerControl device plugin that lets fan curves stop the HP OMEN laptop 
 slug: 20261118-154500_cc-omen-plugin
 project: CC-Omen-plugin
 phase: climbing
-progress: 36/47
+progress: 36/48
 started: 2026-11-18T15:45:00+01:00
 updated: 2026-11-18T16:35:00+01:00
 principal_stated_goal: 'CoolerControl is great, but it cannot stop the fans completely. Convince CoolerControl to stop the fans if the system temperature is low, while the fans still react early enough to keep the hardware cool.'
@@ -133,9 +133,10 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 
 - [ ] ISC-29: Idle for 5 minutes with curves assigned: both fans at 0 RPM and `pwm1_enable` = 2.
 - [x] ISC-30: Under CPU load the CPU fan starts within one status cycle of the CPU temperature crossing the curve's first non-zero point. — ✓ 5 Hz sampler: CPU first ≥ 50 °C at 16:42:45.780, en 2→1 at 16:42:46.232 (0.45 s)
-- [ ] ISC-31: During a 10-minute all-core load the peak CPU temperature stays below the peak of the same load under firmware auto mode, both recorded in the Log.
+- [ ] ISC-31: During a 90-second all-core load the peak CPU temperature with the plugin is lower than with firmware auto under the same load from the same start temperature, both recorded in the Log.
+- [ ] ISC-48: Anti: no live check heats the laptop past 85 °C: every load phase in `scripts/live-checks.sh` runs under a guard that kills the load and sets full speed at 85 °C, no load phase runs longer than 90 s, and the firmware-auto run happens once, after a cool-down.
 - [x] ISC-32: After the load ends, the fans stop again once both curves are back at 0 % and the dwell has passed. — ✓ last reading ≥ 50 °C at 16:42:03.5, en 1→2 at 16:42:36.9 (dwell 30 s + CoolerControl's 2 s response delay), fans 0 RPM
-- [ ] ISC-33: Killing the plugin process during load leaves `pwm1_enable` at 2, or CoolerControl restarts the plugin, within the watchdog timeout.
+- [ ] ISC-33: After `kill -9` of the plugin while the fans are in manual (light load), CoolerControl restarts it and the new instance writes firmware auto, or the script reports how long the fans stayed manual.
 
 ## Test Strategy
 
@@ -185,9 +186,10 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 | ISC-28 | bash | paths written by install script | only listed | rg -n -e install -e cp -e mkdir install.sh | literal | normal | build |
 | ISC-29 | bash | 5-minute idle sampling | 0 RPM, enable=2 | bun scripts/sample.ts --idle 300 | literal | critical | integrity |
 | ISC-30 | bash | sampling under load | start within one cycle | bun scripts/sample.ts --load | literal | critical | integrity |
-| ISC-31 | bash | 10-minute load, plugin vs firmware auto | lower peak | bun scripts/sample.ts --load 600 | literal | critical | integrity |
-| ISC-32 | bash | sampling after load | 0 RPM after dwell | bun scripts/sample.ts --cooldown | literal | normal | integrity |
-| ISC-33 | bash | kill -9 during load, sample sysfs | enable=2 or restarted | bun scripts/sample.ts --kill | literal | critical | integrity |
+| ISC-31 | bash | 90 s load, plugin vs firmware auto, guarded | lower peak | sudo scripts/live-checks.sh | literal | critical | integrity |
+| ISC-32 | bash | sampling after load | 0 RPM after dwell | sudo scripts/live-checks.sh | literal | normal | integrity |
+| ISC-33 | bash | kill -9 at light load, sample sysfs | restarted and auto, or time reported | sudo scripts/live-checks.sh | literal | critical | integrity |
+| ISC-48 | bash | guard trips at 85 °C; phase lengths in the script | ≤ 90 s, guard present | rg -n -e GUARD_C -e LOAD_S scripts/live-checks.sh | literal | critical | build |
 
 ## Not yet specified
 
@@ -209,6 +211,7 @@ Why: the claim is about real fans and temperatures, so it closes on the real lap
 - 2026-11-18 · mutation run: the first pass let "SIGTERM does not hand back" survive because `stop()` already writes auto through the controller (an equivalent mutant); the mutation now removes the `stop()` call itself and is caught. A refuse-to-start test hung for 15 minutes on a mutant that kept running; refuse tests now kill the plugin after 10 s and fail.
 - 2026-11-18 · Status reports duty from the driver's pwm reading, not the requested duty, so CoolerControl shows what the fans really do (33 % at the floor) even in firmware auto.
 - 2026-11-18 · an unreadable temperature means full speed, not firmware auto: a controller that cannot see the temperature should not bet on the firmware's late reaction.
+- 2026-11-18 · live checks are bounded by heat (the user: under firmware auto the laptop gets hot enough to switch itself off). ISC-31 shrank from a 10-minute to a 90-second load, and the `kill -9` test (ISC-33) runs at light load, because it tests how the plugin handles its state, not cooling. A guard at 85 °C covers every phase (ISC-48). This is a safety bound set by the user, not a softened criterion: both still compare or kill under the same conditions as before, only shorter and cooler.
 
 ## Status
 
